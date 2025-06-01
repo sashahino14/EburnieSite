@@ -12,9 +12,9 @@ models:
   - deepseek-ai/DeepSeek-V3-0324
   - deepseek-ai/DeepSeek-R1-0528
 # ── OAuth settings ────────────────────────────────────────────────
-hf_oauth: true                       # enable “Sign-in with HF”
-hf_oauth_expiration_minutes: 480     # keep session tokens 8 h
-hf_oauth_scopes:                     # default is openid profile
+hf_oauth: true                       
+hf_oauth_expiration_minutes: 480     
+hf_oauth_scopes:                    
   - write-repos
 ---
 
