@@ -12,7 +12,7 @@ const app = express();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PORT = process.env.APP_PORT || 5173;
+const PORT = process.env.PORT || process.env.APP_PORT || 5173;
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.static(path.join(__dirname, "dist")));
@@ -560,15 +560,11 @@ app.get("*", (_req, res) => {
 });
 
 /* =========================================================
-   SERVER / VERCEL
+   SERVER
 ========================================================= */
 
-if (process.env.VERCEL !== "1") {
-  app.listen(PORT, () => {
-    console.log(
-      `EburnieSite server is running on port ${PORT}`
-    );
-  });
-}
-
-export default app;
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(
+    `EburnieSite server is running on port ${PORT}`
+  );
+});
