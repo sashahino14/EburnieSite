@@ -560,11 +560,15 @@ app.get("*", (_req, res) => {
 });
 
 /* =========================================================
-   START SERVER
+   SERVER / VERCEL
 ========================================================= */
 
-app.listen(PORT, () => {
-  console.log(
-    `EburnieSite server is running on port ${PORT}`
-  );
-});
+if (process.env.VERCEL !== "1") {
+  app.listen(PORT, () => {
+    console.log(
+      `EburnieSite server is running on port ${PORT}`
+    );
+  });
+}
+
+export default app;
