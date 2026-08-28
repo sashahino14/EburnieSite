@@ -3,7 +3,7 @@ services:
     name: eburnie-site
     runtime: node
     plan: free
-    buildCommand: npm run build
+    buildCommand: npm ci && npm run build
     startCommand: npm start
     envVars:
       - key: DEEPSEEK_API_KEY
