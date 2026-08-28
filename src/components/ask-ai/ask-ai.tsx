@@ -26,14 +26,12 @@ function AskAI({
   onScrollToBottom,
   isAiWorking,
   setisAiWorking,
-  onNewPrompt,
   onSuccess,
 }: {
   html: string;
   setHtml: (html: string) => void;
   onScrollToBottom: () => void;
   isAiWorking: boolean;
-  onNewPrompt: (prompt: string) => void;
   setisAiWorking: React.Dispatch<
     React.SetStateAction<boolean>
   >;
@@ -110,7 +108,6 @@ function AskAI({
     let lastRenderTime = 0;
 
     try {
-      onNewPrompt(prompt);
 
       const request = await fetch(
         "/api/ask-ai",

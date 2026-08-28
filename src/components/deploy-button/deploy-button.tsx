@@ -4,19 +4,15 @@ import { Download } from "lucide-react";
 
 import LoadButton from "../load-button/load-button";
 import Loading from "../loading/loading";
-import { Auth } from "../../../utils/types";
 import { Button } from "../ui/button";
 import { exportProjectZip } from "../../utils/exportZip";
 
 function DeployButton({
   html,
-  auth,
   setHtml,
 }: {
   html: string;
-  auth?: Auth;
   setHtml: (html: string) => void;
-  prompts?: string[];
 }) {
   const [loading, setLoading] = useState(false);
 
@@ -30,7 +26,6 @@ function DeployButton({
 
     try {
       await exportProjectZip(html);
-
       toast.success("Website exported successfully.");
     } catch (error) {
       console.error("ZIP export error:", error);
@@ -47,10 +42,7 @@ function DeployButton({
 
   return (
     <div className="flex items-center justify-end gap-5">
-      <LoadButton
-        auth={auth}
-        setHtml={setHtml}
-      />
+      <LoadButton setHtml={setHtml} />
 
       <Button
         variant="pink"

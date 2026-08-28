@@ -57,8 +57,6 @@ export default function App() {
   const [isAiWorking, setisAiWorking] =
     useState(false);
 
-  const [prompts, setPrompts] =
-    useState<string[]>([]);
 
   const [device, setDevice] =
     useState<"desktop" | "mobile">(
@@ -304,7 +302,6 @@ export default function App() {
         <DeployButton
           html={html}
           setHtml={setHtml}
-          prompts={prompts}
         />
       </Header>
 
@@ -390,12 +387,6 @@ export default function App() {
                 setisAiWorking={
                   setisAiWorking
                 }
-                onNewPrompt={(prompt) => {
-                  setPrompts((prev) => [
-                    ...prev,
-                    prompt,
-                  ]);
-                }}
                 onScrollToBottom={() => {
                   editorRef.current?.revealLine(
                     editorRef.current

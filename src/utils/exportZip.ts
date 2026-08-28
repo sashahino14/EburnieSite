@@ -11,16 +11,11 @@ function safeFileName(value: string) {
 
 export async function exportProjectZip(
   html: string,
-  prompts: string[] = [],
   filename = "eburniesite-project"
 ) {
   const zip = new JSZip();
 
   zip.file("index.html", html);
-
-  if (prompts.length > 0) {
-    zip.file("prompts.txt", prompts.join("\n"));
-  }
 
   zip.file(
     "README.md",
@@ -31,7 +26,6 @@ This website was created with EburnieSite.
 ## Files
 
 - index.html — website source
-${prompts.length > 0 ? "- prompts.txt — AI prompts used to create the project\n" : ""}
 
 ## Preview
 

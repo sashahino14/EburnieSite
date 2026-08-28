@@ -1,18 +1,8 @@
 import classNames from "classnames";
-import { FaMobileAlt, FaUserCircle } from "react-icons/fa";
-import { ChevronDown, LogOut, RefreshCcw, Github } from "lucide-react";
+import { FaMobileAlt } from "react-icons/fa";
+import { RefreshCcw, Github } from "lucide-react";
 import { FaLaptopCode } from "react-icons/fa6";
-import { Auth, HtmlHistory } from "../../../utils/types";
-import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "../ui/dropdown-menu";
+import { HtmlHistory } from "../../../utils/types";
 import { Button } from "../ui/button";
 import { MdAdd } from "react-icons/md";
 import History from "../history/history";
@@ -30,7 +20,6 @@ const DEVICES = [
 
 function Footer({
   onReset,
-  auth,
   htmlHistory,
   setHtml,
   device,
@@ -38,7 +27,6 @@ function Footer({
   iframeRef,
 }: {
   onReset: () => void;
-  auth?: Auth;
   htmlHistory?: HtmlHistory[];
   device: "desktop" | "mobile";
   setHtml: (html: string) => void;
@@ -61,74 +49,6 @@ function Footer({
   return (
     <footer className="border-t bg-slate-200 border-slate-300 dark:bg-neutral-950 dark:border-neutral-800 px-3 py-2 flex items-center justify-between sticky bottom-0 z-20">
       <div className="flex items-center gap-2">
-
-        {auth &&
-          (auth?.isLocalUse ? (
-            <div className="max-w-max bg-amber-500/10 rounded-full px-3 py-1 text-amber-500 border border-amber-500/20 text-sm font-semibold">
-              Local Usage
-            </div>
-          ) : (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <p className="mr-3 text-xs lg:text-sm text-gray-300 flex items-center gap-1 cursor-pointer hover:brightness-110">
-                  <ChevronDown className="size-4" />
-
-                  <Avatar className="size-7">
-                    <AvatarImage
-                      src={auth?.picture}
-                      alt={auth?.preferred_username ?? "User"}
-                    />
-
-                    <AvatarFallback className="text-sm">
-                      {auth?.preferred_username?.charAt(0).toUpperCase() ??
-                        "E"}
-                    </AvatarFallback>
-                  </Avatar>
-
-                  {auth?.preferred_username ?? "User"}
-                </p>
-              </DropdownMenuTrigger>
-
-              <DropdownMenuContent className="w-56" align="start">
-                <DropdownMenuLabel className="font-bold flex items-center gap-2 justify-start">
-                  <FaUserCircle />
-                  My Account
-                </DropdownMenuLabel>
-
-                <DropdownMenuSeparator />
-
-                <DropdownMenuGroup>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      window.open(
-                        `https://github.com/${auth?.preferred_username}`,
-                        "_blank"
-                      );
-                    }}
-                  >
-                    <Github className="size-4" />
-                    GitHub Profile
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-
-                <DropdownMenuSeparator />
-
-                <DropdownMenuItem
-                  onClick={() => {
-                    if (confirm("Are you sure you want to log out?")) {
-                      window.location.href = "/auth/logout";
-                    }
-                  }}
-                >
-                  <LogOut className="size-4 text-red-500" />
-                  Log out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ))}
-
-        {auth && <p className="text-neutral-700">|</p>}
-
         <Button size="sm" variant="secondary" onClick={onReset}>
           <MdAdd className="text-sm" />
           <span>New Project</span>
@@ -143,7 +63,6 @@ function Footer({
       </div>
 
       <div className="flex justify-end items-center gap-2.5">
-
         <Button
           size="sm"
           variant="ghost"

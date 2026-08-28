@@ -1,19 +1,15 @@
-import classNames from "classnames";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Github } from "lucide-react";
 
 import Loading from "../loading/loading";
-import { Auth } from "../../../utils/types";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 
 function LoadButton({
-  auth,
   setHtml,
 }: {
-  auth?: Auth;
   setHtml: (html: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -42,7 +38,6 @@ function LoadButton({
         toast.error(
           "Please enter a valid GitHub repository URL or owner/repository."
         );
-        setLoading(false);
         return;
       }
 
@@ -61,10 +56,10 @@ function LoadButton({
         }
 
         toast.success("GitHub project loaded successfully.");
-
         setOpen(false);
+        setUrl("");
       } else {
-          toast.error(
+        toast.error(
           data.message || "Failed to load the GitHub repository."
         );
       }
@@ -81,11 +76,7 @@ function LoadButton({
   };
 
   return (
-    <div
-      className={classNames("max-md:hidden", {
-        "border-r border-gray-700 pr-5": auth,
-      })}
-    >
+    <div className="max-md:hidden">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <button
@@ -111,8 +102,8 @@ function LoadButton({
 
           <main className="px-4 pt-3 pb-4 space-y-3">
             <p className="text-sm text-neutral-300 bg-neutral-300/15 border border-neutral-300/15 rounded-md px-3 py-2">
-              Load an existing project from a GitHub repository and continue
-              editing it in EburnieSite.
+              Load an existing public GitHub repository and continue editing
+              it in EburnieSite.
             </p>
 
             <label className="block">
@@ -146,7 +137,6 @@ function LoadButton({
               >
                 <Github className="size-3.5 mr-1.5" />
                 Load project
-
                 {loading && <Loading />}
               </Button>
             </div>

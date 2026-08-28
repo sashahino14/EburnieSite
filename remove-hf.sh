@@ -23,9 +23,6 @@ sed -i '/DEFAULT_HF_TOKEN=/d' .env.example 2>/dev/null || true
 sed -i '/HF_TOKEN=/d' .env.example 2>/dev/null || true
 sed -i '/DEFAULT_HF_TOKEN=/d' .env 2>/dev/null || true
 sed -i '/HF_TOKEN=/d' .env 2>/dev/null || true
-sed -i '/OAUTH_CLIENT_ID=/d' .env.example 2>/dev/null || true
-sed -i '/OAUTH_CLIENT_SECRET=/d' .env.example 2>/dev/null || true
-sed -i '/REDIRECT_URI=/d' .env.example 2>/dev/null || true
 
 echo
 echo "[5/8] Création du système d'export ZIP..."
@@ -86,7 +83,7 @@ echo
 echo "[6/8] Recherche des références Hugging Face restantes..."
 
 grep -RInE \
-"huggingface|HuggingFace|HF_TOKEN|DEFAULT_HF_TOKEN|hf_token|oauth|checkUser|@huggingface" \
+"huggingface|HuggingFace|HF_TOKEN|DEFAULT_HF_TOKEN|hf_token|checkUser|@huggingface" \
 src server.js utils .env.example package.json \
 --exclude-dir=node_modules \
 --exclude-dir=dist \
