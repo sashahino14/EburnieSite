@@ -292,7 +292,7 @@ export default function App() {
   return (
     <ThemeProvider
       defaultTheme="dark"
-      storageKey="deepsite-ui-theme"
+      storageKey="eburniesite-ui-theme"
       className="h-screen bg-slate-100 dark:bg-neutral-950 flex flex-col"
     >
       <Header

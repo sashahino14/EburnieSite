@@ -2,7 +2,7 @@ EburnieSite
 
 EburnieSite is an AI-powered website generation platform that lets you create and modify complete websites from natural-language prompts.
 
-It is based on the DeepSite project and has been adapted to use the DeepSeek API directly.
+It is based on the EburnieSite project and has been adapted to use the DeepSeek API directly.
 
 ✨ Features
 
@@ -99,7 +99,7 @@ APP_PORT
 
 🇨🇮 Project
 
-EburnieSite is an independent customization of the DeepSite codebase, adapted for direct DeepSeek API usage.
+EburnieSite is an independent customization of the EburnieSite codebase, adapted for direct DeepSeek API usage.
 
 Created and maintained by Sylvanus Hino.
 
