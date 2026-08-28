@@ -2,302 +2,366 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
-import cookieParser from "cookie-parser";
-import {
-  createRepo,
-  uploadFiles,
-  whoAmI,
-  spaceInfo,
-  fileExists,
-} from "@huggingface/hub";
-import bodyParser from "body-parser";
 
-import checkUser from "./middlewares/checkUser.js";
 import { MODELS, PROVIDERS } from "./utils/providers.js";
-import { COLORS } from "./utils/colors.js";
 
-// Load environment variables from .env file
 dotenv.config();
 
 const app = express();
 
-const ipAddresses = new Map();
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PORT = process.env.APP_PORT || 3000;
-const REDIRECT_URI =
-  process.env.REDIRECT_URI || `http://localhost:${PORT}/auth/login`;
-const MAX_REQUESTS_PER_IP = 2;
+const PORT = process.env.APP_PORT || 5173;
 
-app.use(cookieParser());
-app.use(bodyParser.json());
+app.use(express.json({ limit: "10mb" }));
 app.use(express.static(path.join(__dirname, "dist")));
 
-const getPTag = (repoId) => {
-  return `<p style="border-radius: 8px; text-align: center; font-size: 12px; color: #fff; margin-top: 16px;position: fixed; left: 8px; bottom: 8px; z-index: 10; background: rgba(0, 0, 0, 0.8); padding: 4px 8px;">Made with <img src="https://enzostvs-deepsite.hf.space/logo.svg" alt="DeepSite Logo" style="width: 16px; height: 16px; vertical-align: middle;display:inline-block;margin-right:3px;filter:brightness(0) invert(1);"><a href="https://enzostvs-deepsite.hf.space" style="color: #fff;text-decoration: underline;" target="_blank" >DeepSite</a> - 🧬 <a href="https://enzostvs-deepsite.hf.space?remix=${repoId}" style="color: #fff;text-decoration: underline;" target="_blank" >Remix</a></p>`;
-};
+/* =========================================================
+   HELPERS
+========================================================= */
 
-app.get("/api/login", (_req, res) => {
-  const redirectUrl = `https://huggingface.co/oauth/authorize?client_id=${process.env.OAUTH_CLIENT_ID}&redirect_uri=${REDIRECT_URI}&response_type=code&scope=openid%20profile%20write-repos%20manage-repos%20inference-api&prompt=consent&state=1234567890`;
+function githubHeaders() {
+  return {
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+    "User-Agent": "EburnieSite",
+  };
+}
+
+async function githubRequest(url) {
+  const response = await fetch(url, {
+    headers: githubHeaders(),
+  });
+
+  let data = null;
+
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+
+  return {
+    response,
+    data,
+  };
+}
+
+function decodeGithubContent(content) {
+  return Buffer.from(
+    content.replace(/\n/g, ""),
+    "base64"
+  ).toString("utf8");
+}
+
+/* =========================================================
+   HEALTH
+========================================================= */
+
+app.get("/api/health", (_req, res) => {
   res.status(200).send({
     ok: true,
-    redirectUrl,
+    service: "EburnieSite",
+    provider: "deepseek",
+    providerConfigured: Boolean(
+      process.env.DEEPSEEK_API_KEY
+    ),
+    model:
+      process.env.DEEPSEEK_MODEL ||
+      "deepseek-v4-flash",
   });
 });
-app.get("/auth/login", async (req, res) => {
-  const { code } = req.query;
 
-  if (!code) {
-    return res.redirect(302, "/");
-  }
-  const Authorization = `Basic ${Buffer.from(
-    `${process.env.OAUTH_CLIENT_ID}:${process.env.OAUTH_CLIENT_SECRET}`
-  ).toString("base64")}`;
+/* =========================================================
+   GITHUB PUBLIC PROJECT LOADER
+========================================================= */
 
-  const request_auth = await fetch("https://huggingface.co/oauth/token", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Authorization,
-    },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
-      code: code,
-      redirect_uri: REDIRECT_URI,
-    }),
-  });
+/**
+ * Load a public GitHub repository.
+ *
+ * GET /api/github/load/:owner/:repo
+ *
+ * No authentication required.
+ */
+app.get(
+  "/api/github/load/:owner/:repo",
+  async (req, res) => {
+    try {
+      const { owner, repo } = req.params;
 
-  const response = await request_auth.json();
+      if (!owner || !repo) {
+        return res.status(400).send({
+          ok: false,
+          message: "Invalid GitHub repository.",
+        });
+      }
 
-  if (!response.access_token) {
-    return res.redirect(302, "/");
-  }
+      const cleanOwner = String(owner).trim();
+      const cleanRepo = String(repo)
+        .trim()
+        .replace(/\.git$/, "");
 
-  res.cookie("hf_token", response.access_token, {
-    httpOnly: false,
-    secure: true,
-    sameSite: "none",
-    maxAge: 30 * 24 * 60 * 60 * 1000,
-  });
+      const url =
+        `https://api.github.com/repos/` +
+        `${encodeURIComponent(cleanOwner)}/` +
+        `${encodeURIComponent(cleanRepo)}/contents/index.html`;
 
-  return res.redirect(302, "/");
-});
-app.get("/auth/logout", (req, res) => {
-  res.clearCookie("hf_token", {
-    httpOnly: false,
-    secure: true,
-    sameSite: "none",
-  });
-  return res.redirect(302, "/");
-});
+      const result = await githubRequest(url);
 
-app.get("/api/@me", checkUser, async (req, res) => {
-  let { hf_token } = req.cookies;
+      if (!result.response.ok) {
+        return res.status(result.response.status).send({
+          ok: false,
+          message:
+            result.data?.message ||
+            "Unable to load the GitHub repository.",
+        });
+      }
 
-  if (process.env.HF_TOKEN && process.env.HF_TOKEN !== "") {
-    return res.send({
-      preferred_username: "local-use",
-      isLocalUse: true,
-    });
-  }
+      if (!result.data?.content) {
+        return res.status(404).send({
+          ok: false,
+          message:
+            "index.html was not found in this repository.",
+        });
+      }
 
-  try {
-    const request_user = await fetch("https://huggingface.co/oauth/userinfo", {
-      headers: {
-        Authorization: `Bearer ${hf_token}`,
-      },
-    });
+      const html = decodeGithubContent(
+        result.data.content
+      );
 
-    const user = await request_user.json();
-    res.send(user);
-  } catch (err) {
-    res.clearCookie("hf_token", {
-      httpOnly: false,
-      secure: true,
-      sameSite: "none",
-    });
-    res.status(401).send({
-      ok: false,
-      message: err.message,
-    });
-  }
-});
-
-app.post("/api/deploy", checkUser, async (req, res) => {
-  const { html, title, path, prompts } = req.body;
-  if (!html || (!path && !title)) {
-    return res.status(400).send({
-      ok: false,
-      message: "Missing required fields",
-    });
-  }
-
-  let { hf_token } = req.cookies;
-  if (process.env.HF_TOKEN && process.env.HF_TOKEN !== "") {
-    hf_token = process.env.HF_TOKEN;
-  }
-
-  try {
-    const repo = {
-      type: "space",
-      name: path ?? "",
-    };
-
-    let readme;
-    let newHtml = html;
-
-    if (!path || path === "") {
-      const { name: username } = await whoAmI({ accessToken: hf_token });
-      const newTitle = title
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .split("-")
-        .filter(Boolean)
-        .join("-")
-        .slice(0, 96);
-
-      const repoId = `${username}/${newTitle}`;
-      repo.name = repoId;
-
-      await createRepo({
-        repo,
-        accessToken: hf_token,
+      res.status(200).send({
+        ok: true,
+        html,
+        repository: `${cleanOwner}/${cleanRepo}`,
+        path: `${cleanOwner}/${cleanRepo}`,
+        repoUrl:
+          `https://github.com/${cleanOwner}/${cleanRepo}`,
+        url:
+          `https://${cleanOwner}.github.io/${cleanRepo}/`,
       });
-      const colorFrom = COLORS[Math.floor(Math.random() * COLORS.length)];
-      const colorTo = COLORS[Math.floor(Math.random() * COLORS.length)];
-      readme = `---
-title: ${newTitle}
-emoji: 🐳
-colorFrom: ${colorFrom}
-colorTo: ${colorTo}
-sdk: static
-pinned: false
-tags:
-  - deepsite
----
+    } catch (error) {
+      console.error(
+        "GitHub load error:",
+        error
+      );
 
-Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference`;
+      res.status(500).send({
+        ok: false,
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to load GitHub project.",
+      });
     }
-
-    newHtml = html.replace(/<\/body>/, `${getPTag(repo.name)}</body>`);
-    const file = new Blob([newHtml], { type: "text/html" });
-    file.name = "index.html"; // Add name property to the Blob
-
-    // create prompt.txt file with all the prompts used, split by new line
-    const newPrompts = ``.concat(prompts.map((prompt) => prompt).join("\n"));
-    const promptFile = new Blob([newPrompts], { type: "text/plain" });
-    promptFile.name = "prompts.txt"; // Add name property to the Blob
-
-    const files = [file, promptFile];
-    if (readme) {
-      const readmeFile = new Blob([readme], { type: "text/markdown" });
-      readmeFile.name = "README.md"; // Add name property to the Blob
-      files.push(readmeFile);
-    }
-    await uploadFiles({
-      repo,
-      files,
-      accessToken: hf_token,
-    });
-    return res.status(200).send({ ok: true, path: repo.name });
-  } catch (err) {
-    return res.status(500).send({
-      ok: false,
-      message: err.message,
-    });
   }
-});
+);
+
+/**
+ * Backward-compatible remix endpoint.
+ *
+ * GET /api/remix/:owner/:repo
+ */
+app.get(
+  "/api/remix/:owner/:repo",
+  async (req, res) => {
+    try {
+      const { owner, repo } = req.params;
+
+      if (!owner || !repo) {
+        return res.status(400).send({
+          ok: false,
+          message: "Invalid GitHub repository.",
+        });
+      }
+
+      const cleanOwner = String(owner).trim();
+      const cleanRepo = String(repo)
+        .trim()
+        .replace(/\.git$/, "");
+
+      const url =
+        `https://api.github.com/repos/` +
+        `${encodeURIComponent(cleanOwner)}/` +
+        `${encodeURIComponent(cleanRepo)}/contents/index.html`;
+
+      const result = await githubRequest(url);
+
+      if (!result.response.ok) {
+        return res.status(result.response.status).send({
+          ok: false,
+          message:
+            result.data?.message ||
+            "Unable to load GitHub project.",
+        });
+      }
+
+      if (!result.data?.content) {
+        return res.status(404).send({
+          ok: false,
+          message:
+            "index.html was not found in this repository.",
+        });
+      }
+
+      const html = decodeGithubContent(
+        result.data.content
+      );
+
+      res.status(200).send({
+        ok: true,
+        html,
+        path: `${cleanOwner}/${cleanRepo}`,
+        isOwner: false,
+        repoUrl:
+          `https://github.com/${cleanOwner}/${cleanRepo}`,
+        url:
+          `https://${cleanOwner}.github.io/${cleanRepo}/`,
+      });
+    } catch (error) {
+      console.error(
+        "GitHub remix error:",
+        error
+      );
+
+      res.status(500).send({
+        ok: false,
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to load GitHub project.",
+      });
+    }
+  }
+);
+
+/* =========================================================
+   DEEPSEEK AI
+========================================================= */
 
 app.post("/api/ask-ai", async (req, res) => {
-  const { prompt, html, previousPrompt, provider, model } = req.body;
+  const {
+    prompt,
+    html,
+    previousPrompt,
+    provider = "deepseek",
+    model,
+  } = req.body;
+
   if (!prompt) {
     return res.status(400).send({
       ok: false,
-      message: "Missing required fields",
+      message: "Missing required fields.",
     });
   }
 
   if (!model) {
     return res.status(400).send({
       ok: false,
-      message: "Missing model field",
+      message: "Missing model field.",
     });
   }
 
   const selectedModel = MODELS.find(
-    (m) => m.value === model || m.label === model
+    (item) =>
+      item.value === model ||
+      item.label === model
   );
+
   if (!selectedModel) {
     return res.status(400).send({
       ok: false,
-      message: "Invalid model selected",
+      message: "Invalid model selected.",
     });
   }
-  if (!selectedModel.providers.includes(provider) && provider !== "auto") {
+
+  if (
+    !selectedModel.providers.includes(provider) &&
+    provider !== "auto"
+  ) {
     return res.status(400).send({
       ok: false,
       openSelectProvider: true,
-      message: `The selected model does not support the ${provider} provider.`,
+      message:
+        `The selected model does not support ` +
+        `the ${provider} provider.`,
     });
   }
 
-  let { hf_token } = req.cookies;
-  let token = hf_token;
-
-  if (process.env.HF_TOKEN && process.env.HF_TOKEN !== "") {
-    token = process.env.HF_TOKEN;
-  }
-
-  const ip =
-    req.headers["x-forwarded-for"]?.split(",")[0].trim() ||
-    req.headers["x-real-ip"] ||
-    req.socket.remoteAddress ||
-    req.ip ||
-    "0.0.0.0";
-
-  if (!token) {
-    ipAddresses.set(ip, (ipAddresses.get(ip) || 0) + 1);
-    if (ipAddresses.get(ip) > MAX_REQUESTS_PER_IP) {
-      return res.status(429).send({
-        ok: false,
-        openLogin: true,
-        message: "Log In to continue using the service",
-      });
-    }
-
-    token = process.env.DEFAULT_HF_TOKEN;
-  }
-
-  // Set up response headers for streaming
-  res.setHeader("Content-Type", "text/plain");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-
-  let completeResponse = "";
-
-  const TOKENS_USED =
+  const tokensUsed =
     (prompt?.length || 0) +
     (previousPrompt?.length || 0) +
     (html?.length || 0);
 
-  const selectedProvider = PROVIDERS.deepseek;
+  const selectedProvider =
+    PROVIDERS.deepseek;
 
-  if (TOKENS_USED >= selectedProvider.max_tokens) {
+  if (
+    tokensUsed >= selectedProvider.max_tokens
+  ) {
     return res.status(400).send({
       ok: false,
       openSelectProvider: true,
-      message: `Context is too long. ${selectedProvider.name} allows ${selectedProvider.max_tokens} max tokens.`,
+      message:
+        `Context is too long. ` +
+        `${selectedProvider.name} allows ` +
+        `${selectedProvider.max_tokens} max tokens.`,
     });
   }
+
+  const apiKey =
+    process.env.DEEPSEEK_API_KEY;
+
+  if (!apiKey) {
+    return res.status(500).send({
+      ok: false,
+      message:
+        "DEEPSEEK_API_KEY is not configured.",
+    });
+  }
+
+  res.setHeader(
+    "Content-Type",
+    "text/plain; charset=utf-8"
+  );
+  res.setHeader(
+    "Cache-Control",
+    "no-cache"
+  );
+  res.setHeader(
+    "Connection",
+    "keep-alive"
+  );
+
+  let completeResponse = "";
 
   try {
     const messages = [
       {
         role: "system",
-        content: `ONLY USE HTML, CSS AND JAVASCRIPT. If you want to use ICON make sure to import the library first. Try to create the best UI possible by using only HTML, CSS AND JAVASCRIPT. MAKE IT RESPONSIVE USING TAILWINDCSS. Use as much as you can TailwindCSS for the CSS, if you can't do something with TailwindCSS, then use custom CSS (make sure to import <script src="https://cdn.tailwindcss.com"></script> in the head). Also, try to elaborate as much as you can, to create something unique. ALWAYS GIVE THE RESPONSE INTO A SINGLE HTML FILE`,
+        content: `
+ONLY USE HTML, CSS AND JAVASCRIPT.
+
+If you want to use an icon, make sure to import the required library first.
+
+Create the best UI possible using HTML, CSS and JavaScript.
+
+MAKE IT FULLY RESPONSIVE.
+
+Use TailwindCSS whenever possible. If you need custom CSS, you may use it as well.
+
+If TailwindCSS is used, make sure to import it in the HTML head:
+
+<script src="https://cdn.tailwindcss.com"></script>
+
+Create modern, polished, professional and unique interfaces.
+
+ALWAYS RETURN THE RESULT AS A SINGLE COMPLETE HTML FILE.
+
+The response must contain the complete website code and nothing outside the HTML document.
+        `.trim(),
       },
+
       ...(previousPrompt
         ? [
             {
@@ -306,37 +370,39 @@ app.post("/api/ask-ai", async (req, res) => {
             },
           ]
         : []),
+
       ...(html
         ? [
             {
               role: "assistant",
-              content: `The current code is: ${html}.`,
+              content:
+                `The current code is: ${html}`,
             },
           ]
         : []),
+
       {
         role: "user",
         content: prompt,
       },
     ];
 
-    const model = process.env.DEEPSEEK_MODEL || "deepseek-v4-flash";
-    const apiKey = process.env.DEEPSEEK_API_KEY;
-
-    if (!apiKey) {
-      throw new Error("DEEPSEEK_API_KEY is not configured.");
-    }
+    const deepSeekModel =
+      process.env.DEEPSEEK_MODEL ||
+      "deepseek-v4-flash";
 
     const response = await fetch(
       "https://api.deepseek.com/chat/completions",
       {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
+          "Content-Type":
+            "application/json",
+          Authorization:
+            `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          model,
+          model: deepSeekModel,
           messages,
           stream: true,
           max_tokens: 131000,
@@ -345,40 +411,59 @@ app.post("/api/ask-ai", async (req, res) => {
     );
 
     if (!response.ok) {
-      const errorText = await response.text();
+      const errorText =
+        await response.text();
+
       throw new Error(
         `DeepSeek API error (${response.status}): ${errorText}`
       );
     }
 
     if (!response.body) {
-      throw new Error("DeepSeek returned an empty response body.");
+      throw new Error(
+        "DeepSeek returned an empty response body."
+      );
     }
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
+    const reader =
+      response.body.getReader();
+
+    const decoder =
+      new TextDecoder();
 
     let buffer = "";
     let finished = false;
 
     while (!finished) {
-      const { value, done } = await reader.read();
+      const { value, done } =
+        await reader.read();
 
-      if (done) break;
+      if (done) {
+        break;
+      }
 
-      buffer += decoder.decode(value, { stream: true });
+      buffer += decoder.decode(value, {
+        stream: true,
+      });
 
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
+      const lines =
+        buffer.split("\n");
+
+      buffer =
+        lines.pop() || "";
 
       for (const line of lines) {
         const trimmed = line.trim();
 
-        if (!trimmed || !trimmed.startsWith("data:")) {
+        if (
+          !trimmed ||
+          !trimmed.startsWith("data:")
+        ) {
           continue;
         }
 
-        const data = trimmed.slice(5).trim();
+        const data =
+          trimmed.slice(5).trim();
 
         if (data === "[DONE]") {
           finished = true;
@@ -386,124 +471,100 @@ app.post("/api/ask-ai", async (req, res) => {
         }
 
         try {
-          const parsed = JSON.parse(data);
-          const chunk = parsed.choices?.[0]?.delta?.content;
+          const parsed =
+            JSON.parse(data);
 
-          if (!chunk) continue;
+          const chunk =
+            parsed.choices?.[0]?.delta
+              ?.content;
+
+          if (!chunk) {
+            continue;
+          }
 
           let newChunk = chunk;
 
           if (chunk.includes("</html>")) {
-            newChunk = newChunk.replace(/<\/html>[\s\S]*/, "</html>");
+            newChunk =
+              newChunk.replace(
+                /<\/html>[\s\S]*/,
+                "</html>"
+              );
           }
 
-          completeResponse += newChunk;
+          completeResponse +=
+            newChunk;
+
           res.write(newChunk);
 
-          if (completeResponse.includes("</html>")) {
+          if (
+            completeResponse.includes(
+              "</html>"
+            )
+          ) {
             finished = true;
             break;
           }
         } catch {
-          // Ignore malformed/incomplete SSE chunks.
+          // Ignore incomplete SSE chunks.
         }
       }
     }
 
     res.end();
   } catch (error) {
-    if (error.message.includes("exceeded your monthly included credits")) {
-      return res.status(402).send({
-        ok: false,
-        openProModal: true,
-        message: error.message,
-      });
-    }
-    if (!res.headersSent) {
-      res.status(500).send({
-        ok: false,
-        message:
-          error.message || "An error occurred while processing your request.",
-      });
-    } else {
-      // Otherwise end the stream
-      res.end();
-    }
-  }
-});
+    const message =
+      error instanceof Error
+        ? error.message
+        : "An error occurred while processing your request.";
 
-app.get("/api/remix/:username/:repo", async (req, res) => {
-  const { username, repo } = req.params;
-  const { hf_token } = req.cookies;
-
-  let token = hf_token || process.env.DEFAULT_HF_TOKEN;
-
-  if (process.env.HF_TOKEN && process.env.HF_TOKEN !== "") {
-    token = process.env.HF_TOKEN;
-  }
-
-  const repoId = `${username}/${repo}`;
-
-  const url = `https://huggingface.co/spaces/${repoId}/raw/main/index.html`;
-  try {
-    const space = await spaceInfo({
-      name: repoId,
-      accessToken: token,
-      additionalFields: ["author"],
-    });
-
-    if (!space || space.sdk !== "static" || space.private) {
-      return res.status(404).send({
-        ok: false,
-        message: "Space not found",
-      });
-    }
-
-    const response = await fetch(url);
-    if (!response.ok) {
-      return res.status(404).send({
-        ok: false,
-        message: "Space not found",
-      });
-    }
-    let html = await response.text();
-    // remove the last p tag including this url https://enzostvs-deepsite.hf.space
-    html = html.replace(getPTag(repoId), "");
-
-    let user = null;
-
-    if (token) {
-      const request_user = await fetch(
-        "https://huggingface.co/oauth/userinfo",
-        {
-          headers: {
-            Authorization: `Bearer ${hf_token}`,
-          },
-        }
+    if (
+      message.includes(
+        "exceeded your monthly included credits"
       )
-        .then((res) => res.json())
-        .catch(() => null);
+    ) {
+      if (!res.headersSent) {
+        return res.status(402).send({
+          ok: false,
+          openProModal: true,
+          message,
+        });
+      }
 
-      user = request_user;
+      return res.end();
     }
 
-    res.status(200).send({
-      ok: true,
-      html,
-      isOwner: space.author === user?.preferred_username,
-      path: repoId,
-    });
-  } catch (error) {
-    return res.status(500).send({
-      ok: false,
-      message: error.message,
-    });
+    if (!res.headersSent) {
+      return res.status(500).send({
+        ok: false,
+        message,
+      });
+    }
+
+    res.end();
   }
 });
+
+/* =========================================================
+   FRONTEND FALLBACK
+========================================================= */
+
 app.get("*", (_req, res) => {
-  res.sendFile(path.join(__dirname, "dist", "index.html"));
+  res.sendFile(
+    path.join(
+      __dirname,
+      "dist",
+      "index.html"
+    )
+  );
 });
+
+/* =========================================================
+   START SERVER
+========================================================= */
 
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(
+    `EburnieSite server is running on port ${PORT}`
+  );
 });

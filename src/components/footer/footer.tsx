@@ -1,6 +1,6 @@
 import classNames from "classnames";
 import { FaMobileAlt, FaUserCircle } from "react-icons/fa";
-import { ChevronDown, LogOut, RefreshCcw, SparkleIcon } from "lucide-react";
+import { ChevronDown, LogOut, RefreshCcw, Github } from "lucide-react";
 import { FaLaptopCode } from "react-icons/fa6";
 import { Auth, HtmlHistory } from "../../../utils/types";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
@@ -49,7 +49,9 @@ function Footer({
     if (iframeRef?.current) {
       const iframe = iframeRef.current;
       const content = iframe.srcdoc;
+
       iframe.srcdoc = "";
+
       setTimeout(() => {
         iframe.srcdoc = content;
       }, 10);
@@ -59,70 +61,79 @@ function Footer({
   return (
     <footer className="border-t bg-slate-200 border-slate-300 dark:bg-neutral-950 dark:border-neutral-800 px-3 py-2 flex items-center justify-between sticky bottom-0 z-20">
       <div className="flex items-center gap-2">
+
         {auth &&
           (auth?.isLocalUse ? (
-            <>
-              <div className="max-w-max bg-amber-500/10 rounded-full px-3 py-1 text-amber-500 border border-amber-500/20 text-sm font-semibold">
-                Local Usage
-              </div>
-            </>
+            <div className="max-w-max bg-amber-500/10 rounded-full px-3 py-1 text-amber-500 border border-amber-500/20 text-sm font-semibold">
+              Local Usage
+            </div>
           ) : (
-            <>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <p className="mr-3 text-xs lg:text-sm text-gray-300 flex items-center gap-1 cursor-pointer hover:brightness-110">
-                    <ChevronDown className="size-4" />
-                    <Avatar className="size-7">
-                      <AvatarImage src={auth?.picture} alt="@shadcn" />
-                      <AvatarFallback className="text-sm">
-                        {auth?.preferred_username?.charAt(0).toUpperCase() ??
-                          "E"}
-                      </AvatarFallback>
-                    </Avatar>
-                    {auth?.preferred_username ?? "enzostvs"}
-                  </p>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56" align="start">
-                  <DropdownMenuLabel className="font-bold flex items-center gap-2 justify-start">
-                    <FaUserCircle className="" />
-                    My Account
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuGroup>
-                    <a
-                      href="https://huggingface.co/settings/billing"
-                      target="_blank"
-                    >
-                      <DropdownMenuItem>Usage Quota</DropdownMenuItem>
-                    </a>
-                    <a
-                      href={`https://huggingface.co/${auth?.preferred_username}`}
-                      target="_blank"
-                    >
-                      <DropdownMenuItem>Hugging Face profile</DropdownMenuItem>
-                    </a>
-                  </DropdownMenuGroup>
-                  <DropdownMenuSeparator />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <p className="mr-3 text-xs lg:text-sm text-gray-300 flex items-center gap-1 cursor-pointer hover:brightness-110">
+                  <ChevronDown className="size-4" />
+
+                  <Avatar className="size-7">
+                    <AvatarImage
+                      src={auth?.picture}
+                      alt={auth?.preferred_username ?? "User"}
+                    />
+
+                    <AvatarFallback className="text-sm">
+                      {auth?.preferred_username?.charAt(0).toUpperCase() ??
+                        "E"}
+                    </AvatarFallback>
+                  </Avatar>
+
+                  {auth?.preferred_username ?? "User"}
+                </p>
+              </DropdownMenuTrigger>
+
+              <DropdownMenuContent className="w-56" align="start">
+                <DropdownMenuLabel className="font-bold flex items-center gap-2 justify-start">
+                  <FaUserCircle />
+                  My Account
+                </DropdownMenuLabel>
+
+                <DropdownMenuSeparator />
+
+                <DropdownMenuGroup>
                   <DropdownMenuItem
                     onClick={() => {
-                      if (confirm("Are you sure you want to log out?")) {
-                        // go to /auth/logout page
-                        window.location.href = "/auth/logout";
-                      }
+                      window.open(
+                        `https://github.com/${auth?.preferred_username}`,
+                        "_blank"
+                      );
                     }}
                   >
-                    <LogOut className="size-4 text-red-500" />
-                    Log out
+                    <Github className="size-4" />
+                    GitHub Profile
                   </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </>
+                </DropdownMenuGroup>
+
+                <DropdownMenuSeparator />
+
+                <DropdownMenuItem
+                  onClick={() => {
+                    if (confirm("Are you sure you want to log out?")) {
+                      window.location.href = "/auth/logout";
+                    }
+                  }}
+                >
+                  <LogOut className="size-4 text-red-500" />
+                  Log out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           ))}
+
         {auth && <p className="text-neutral-700">|</p>}
+
         <Button size="sm" variant="secondary" onClick={onReset}>
           <MdAdd className="text-sm" />
           <span>New Project</span>
         </Button>
+
         {htmlHistory && htmlHistory.length > 0 && (
           <>
             <p className="text-neutral-700">|</p>
@@ -130,20 +141,29 @@ function Footer({
           </>
         )}
       </div>
+
       <div className="flex justify-end items-center gap-2.5">
-        <a
-          href="https://huggingface.co/spaces/victor/deepsite-gallery"
-          target="_blank"
+
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            window.open("https://github.com", "_blank");
+          }}
         >
-          <Button size="sm" variant="ghost">
-            <SparkleIcon className="size-3.5" />
-            <span className="max-lg:hidden">DeepSite Gallery</span>
-          </Button>
-        </a>
-        <Button size="sm" variant="default" onClick={handleRefreshIframe}>
+          <Github className="size-3.5" />
+          <span className="max-lg:hidden">GitHub</span>
+        </Button>
+
+        <Button
+          size="sm"
+          variant="default"
+          onClick={handleRefreshIframe}
+        >
           <RefreshCcw className="size-3.5" />
           <span className="max-lg:hidden">Refresh Preview</span>
         </Button>
+
         <div className="flex items-center rounded-full p-0.5 bg-neutral-700/70 relative overflow-hidden z-0 max-lg:hidden gap-0.5">
           <div
             className={classNames(
@@ -153,6 +173,7 @@ function Footer({
               }
             )}
           />
+
           {DEVICES.map((deviceItem) => (
             <button
               key={deviceItem.name}
@@ -163,7 +184,9 @@ function Footer({
                   "hover:bg-neutral-800": device !== deviceItem.name,
                 }
               )}
-              onClick={() => setDevice(deviceItem.name as "desktop" | "mobile")}
+              onClick={() =>
+                setDevice(deviceItem.name as "desktop" | "mobile")
+              }
             >
               <deviceItem.icon className="text-sm" />
             </button>

@@ -13,54 +13,60 @@ function ProModal({
 }) {
   const [, setStorage] = useLocalStorage("html_content");
 
-  const handleProClick = () => {
+  const handleContinue = () => {
     if (html !== defaultHTML) {
       setStorage(html);
     }
+
+    onClose(false);
   };
 
   return (
     <>
       <div
         className={classNames(
-          "h-screen w-screen bg-black/20 fixed left-0 top-0 z-40",
+          "h-screen w-screen bg-black/30 fixed left-0 top-0 z-40 backdrop-blur-[2px]",
           {
             "opacity-0 pointer-events-none": !open,
           }
         )}
         onClick={() => onClose(false)}
-      ></div>
+      />
+
       <div
         className={classNames(
-          "absolute top-0 -translate-y-[calc(100%+16px)] right-0 z-40 w-96 bg-white border border-gray-200 rounded-lg shadow-lg transition-all duration-75 overflow-hidden",
+          "absolute top-0 -translate-y-[calc(100%+16px)] right-0 z-40 w-96 max-w-[calc(100vw-24px)] bg-white border border-gray-200 rounded-lg shadow-xl transition-all duration-150 overflow-hidden",
           {
             "opacity-0 pointer-events-none": !open,
           }
         )}
       >
-        <header className="flex items-center text-sm px-4 py-2 border-b border-gray-200 gap-2 bg-gray-100 font-semibold text-gray-700">
-          <span className="bg-linear-to-br shadow-green-500/10 dark:shadow-green-500/20 inline-block -skew-x-12 border border-gray-200 from-pink-300 via-green-200 to-yellow-200 text-xs font-bold text-black shadow-lg dark:from-pink-500 dark:via-green-500 dark:to-yellow-500 dark:text-black rounded-lg px-2.5 py-0.5 ">
-            PRO
+        <header className="flex items-center text-sm px-4 py-3 border-b border-gray-200 gap-2 bg-gray-50 font-semibold text-gray-800">
+          <span className="bg-gradient-to-br from-sky-500 to-emerald-500 text-white text-xs font-bold rounded-lg px-2.5 py-1 shadow-sm">
+            E
           </span>
-          Your free inference quota is exhausted
+
+          AI usage limit
         </header>
-        <main className="px-4 pt-3 pb-4">
-          <p className="text-gray-950 text-sm font-semibold flex items-center justify-between">
-            Upgrade to a PRO account to activate Inference Providers and
-            continue using DeepSite.
+
+        <main className="px-4 pt-4 pb-4">
+          <p className="text-gray-950 text-sm font-semibold">
+            Your current AI usage limit has been reached.
           </p>
-          <p className="text-sm text-pretty text-gray-500 mt-2">
-            It also unlocks thousands of Space apps powered by ZeroGPU for 3d,
-            audio, music, video and more!
+
+          <p className="text-sm text-gray-500 mt-2 leading-relaxed">
+            EburnieSite uses DeepSeek to generate and modify your websites.
+            Please check your server configuration or DeepSeek API usage before
+            continuing.
           </p>
-          <a
-            href="https://huggingface.co/subscribe/pro"
-            target="_blank"
+
+          <button
+            type="button"
+            onClick={handleContinue}
             className="mt-4 bg-black text-white cursor-pointer rounded-full py-2 px-3 text-sm font-medium w-full block text-center hover:bg-gray-800 transition duration-200 ease-in-out"
-            onClick={handleProClick}
           >
-            Subscribe to PRO ($9/month)
-          </a>
+            Continue
+          </button>
         </main>
       </div>
     </>
