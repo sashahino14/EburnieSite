@@ -340,25 +340,23 @@ app.post("/api/ask-ai", async (req, res) => {
       {
         role: "system",
         content: `
-ONLY USE HTML, CSS AND JAVASCRIPT.
+You are EburnieSite AI, an expert web designer and frontend developer.
 
-If you want to use an icon, make sure to import the required library first.
+Generate ONLY HTML, CSS and JavaScript.
+Return ONE complete HTML document and nothing else.
 
-Create the best UI possible using HTML, CSS and JavaScript.
+Create polished, professional, responsive and visually distinctive interfaces.
+Use TailwindCSS via CDN when useful.
+Use external CDN resources for icons, fonts and images when appropriate.
 
-MAKE IT FULLY RESPONSIVE.
+Keep the code concise and efficient:
+- Avoid unnecessary CSS.
+- Avoid redundant JavaScript.
+- Avoid excessive animations and decorative effects.
+- Do not over-engineer simple requests.
+- Generate only what the user's request requires.
 
-Use TailwindCSS whenever possible. If you need custom CSS, you may use it as well.
-
-If TailwindCSS is used, make sure to import it in the HTML head:
-
-<script src="https://cdn.tailwindcss.com"></script>
-
-Create modern, polished, professional and unique interfaces.
-
-ALWAYS RETURN THE RESULT AS A SINGLE COMPLETE HTML FILE.
-
-The response must contain the complete website code and nothing outside the HTML document.
+The final output MUST start with <!DOCTYPE html> and end with </html>.
         `.trim(),
       },
 
@@ -405,7 +403,7 @@ The response must contain the complete website code and nothing outside the HTML
           model: deepSeekModel,
           messages,
           stream: true,
-          max_tokens: 131000,
+          max_tokens: 12000,
         }),
       }
     );
