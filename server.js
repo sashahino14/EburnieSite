@@ -10,7 +10,6 @@ import {
   spaceInfo,
   fileExists,
 } from "@huggingface/hub";
-import { InferenceClient } from "@huggingface/inference";
 import bodyParser from "body-parser";
 
 import checkUser from "./middlewares/checkUser.js";
@@ -276,99 +275,141 @@ app.post("/api/ask-ai", async (req, res) => {
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
 
-  const client = new InferenceClient(token);
   let completeResponse = "";
 
-  let TOKENS_USED = prompt?.length;
-  if (previousPrompt) TOKENS_USED += previousPrompt.length;
-  if (html) TOKENS_USED += html.length;
+  const TOKENS_USED =
+    (prompt?.length || 0) +
+    (previousPrompt?.length || 0) +
+    (html?.length || 0);
 
-  const DEFAULT_PROVIDER = PROVIDERS.novita;
-  const selectedProvider =
-    provider === "auto"
-      ? PROVIDERS[selectedModel.autoProvider]
-      : PROVIDERS[provider] ?? DEFAULT_PROVIDER;
+  const selectedProvider = PROVIDERS.deepseek;
 
-  if (provider !== "auto" && TOKENS_USED >= selectedProvider.max_tokens) {
+  if (TOKENS_USED >= selectedProvider.max_tokens) {
     return res.status(400).send({
       ok: false,
       openSelectProvider: true,
-      message: `Context is too long. ${selectedProvider.name} allow ${selectedProvider.max_tokens} max tokens.`,
+      message: `Context is too long. ${selectedProvider.name} allows ${selectedProvider.max_tokens} max tokens.`,
     });
   }
 
   try {
-    const chatCompletion = client.chatCompletionStream({
-      model: selectedModel.value,
-      provider: selectedProvider.id,
-      messages: [
-        {
-          role: "system",
-          content: `ONLY USE HTML, CSS AND JAVASCRIPT. If you want to use ICON make sure to import the library first. Try to create the best UI possible by using only HTML, CSS and JAVASCRIPT. MAKE IT RESPONSIVE USING TAILWINDCSS. Use as much as you can TailwindCSS for the CSS, if you can't do something with TailwindCSS, then use custom CSS (make sure to import <script src="https://cdn.tailwindcss.com"></script> in the head). Also, try to ellaborate as much as you can, to create something unique. ALWAYS GIVE THE RESPONSE INTO A SINGLE HTML FILE`,
-        },
-        ...(previousPrompt
-          ? [
-              {
-                role: "user",
-                content: previousPrompt,
-              },
-            ]
-          : []),
-        ...(html
-          ? [
-              {
-                role: "assistant",
-                content: `The current code is: ${html}.`,
-              },
-            ]
-          : []),
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-      ...(selectedProvider.id !== "sambanova"
-        ? {
-            max_tokens: selectedProvider.max_tokens,
-          }
-        : {}),
-    });
+    const messages = [
+      {
+        role: "system",
+        content: `ONLY USE HTML, CSS AND JAVASCRIPT. If you want to use ICON make sure to import the library first. Try to create the best UI possible by using only HTML, CSS AND JAVASCRIPT. MAKE IT RESPONSIVE USING TAILWINDCSS. Use as much as you can TailwindCSS for the CSS, if you can't do something with TailwindCSS, then use custom CSS (make sure to import <script src="https://cdn.tailwindcss.com"></script> in the head). Also, try to elaborate as much as you can, to create something unique. ALWAYS GIVE THE RESPONSE INTO A SINGLE HTML FILE`,
+      },
+      ...(previousPrompt
+        ? [
+            {
+              role: "user",
+              content: previousPrompt,
+            },
+          ]
+        : []),
+      ...(html
+        ? [
+            {
+              role: "assistant",
+              content: `The current code is: ${html}.`,
+            },
+          ]
+        : []),
+      {
+        role: "user",
+        content: prompt,
+      },
+    ];
 
-    while (true) {
-      const { done, value } = await chatCompletion.next();
-      if (done) {
-        break;
+    const model = process.env.DEEPSEEK_MODEL || "deepseek-v4-flash";
+    const apiKey = process.env.DEEPSEEK_API_KEY;
+
+    if (!apiKey) {
+      throw new Error("DEEPSEEK_API_KEY is not configured.");
+    }
+
+    const response = await fetch(
+      "https://api.deepseek.com/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          stream: true,
+          max_tokens: 131000,
+        }),
       }
-      const chunk = value.choices[0]?.delta?.content;
-      if (chunk) {
-        let newChunk = chunk;
-        if (!selectedModel?.isThinker) {
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `DeepSeek API error (${response.status}): ${errorText}`
+      );
+    }
+
+    if (!response.body) {
+      throw new Error("DeepSeek returned an empty response body.");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+
+    let buffer = "";
+    let finished = false;
+
+    while (!finished) {
+      const { value, done } = await reader.read();
+
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+
+        if (!trimmed || !trimmed.startsWith("data:")) {
+          continue;
+        }
+
+        const data = trimmed.slice(5).trim();
+
+        if (data === "[DONE]") {
+          finished = true;
+          break;
+        }
+
+        try {
+          const parsed = JSON.parse(data);
+          const chunk = parsed.choices?.[0]?.delta?.content;
+
+          if (!chunk) continue;
+
+          let newChunk = chunk;
+
           if (chunk.includes("</html>")) {
-            // Replace everything after the last </html> tag with an empty string
             newChunk = newChunk.replace(/<\/html>[\s\S]*/, "</html>");
           }
+
           completeResponse += newChunk;
           res.write(newChunk);
-          if (newChunk.includes("</html>")) {
+
+          if (completeResponse.includes("</html>")) {
+            finished = true;
             break;
           }
-        } else {
-          // check if in the completeResponse there is already a </html> tag but after the last </think> tag, if yes break the loop
-          const lastThinkTagIndex = completeResponse.lastIndexOf("</think>");
-          completeResponse += newChunk;
-          res.write(newChunk);
-          if (lastThinkTagIndex !== -1) {
-            const afterLastThinkTag = completeResponse.slice(
-              lastThinkTagIndex + "</think>".length
-            );
-            if (afterLastThinkTag.includes("</html>")) {
-              break;
-            }
-          }
+        } catch {
+          // Ignore malformed/incomplete SSE chunks.
         }
       }
     }
-    // End the response stream
+
     res.end();
   } catch (error) {
     if (error.message.includes("exceeded your monthly included credits")) {
